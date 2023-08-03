@@ -1,0 +1,32 @@
+# 使用 Windows Nano Server 2019 作为基础镜像
+FROM mcr.microsoft.com/windows/nanoserver:1809
+
+# 安装 Chocolatey（Windows 包管理工具）和必要的软件
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+RUN iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')) ; \
+    choco install -y --no-progress wine qemu kx yos4 zenhei xz dbus curl firefox mactype gnome-system-monitor mate-system-monitor git xfce4 xfce4-terminal tightvncserver wget ; \
+    Remove-Item -Force C:\ProgramData\chocolatey
+
+# 下载 noVNC
+RUN Invoke-WebRequest -Uri https://github.com/novnc/noVNC/archive/refs/tags/v1.2.0.tar.gz -OutFile v1.2.0.tar.gz ; \
+    tar -xvf v1.2.0.tar.gz
+
+# 创建 VNC 目录并设置密码
+RUN mkdir C:\.vnc ; \
+    'luo' | Out-File C:\.vnc\passwd
+
+# 配置 VNC 启动脚本
+RUN Set-Content -Path 'C:\.vnc\xstartup' -Value 'cmd /c start wmic process call create "C:\\Windows\\System32\\cmd.exe"'
+
+# 创建启动脚本
+RUN Set-Content -Path 'C:\luo.bat' -Value '@echo off\r\nstart vncserver :2000 -geometry 1360x768\r\nC:\noVNC-1.2.0\utils\launch.bat --vnc localhost:7900 --listen 8900'
+
+# 设置防火墙规则
+RUN netsh advfirewall firewall add rule name='VNC' dir=in action=allow protocol=TCP localport=8900
+
+# 暴露端口
+EXPOSE 8900
+
+# 设置默认命令
+CMD ["cmd", "/c", "C:\\luo.bat"]
